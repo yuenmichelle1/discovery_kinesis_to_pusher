@@ -1,0 +1,13 @@
+# frozen_string_literal: true
+
+source 'https://rubygems.org'
+
+gem 'aws-sdk-dynamodb'
+gem 'geocoder'
+gem 'pusher'
+
+group :development, :test do
+  gem 'rspec'
+  gem 'dotenv-rails'
+end
+

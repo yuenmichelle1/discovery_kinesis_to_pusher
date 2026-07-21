@@ -1,0 +1,51 @@
+name: Deploy Ruby Lambda
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      LAMBDA_NAME: push_to_pusher_lambda
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+
+      - name: Install dependencies
+        run: |
+          if [ -f Gemfile ]; then
+            bundle install
+          fi
+
+      - name: Zip Lambda
+        run: |
+          mkdir build
+          cp -R kinesis-to-pusher/* build/
+          cd build
+          zip -r ../lambda.zip .
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          aws-region: us-east-1
+
+      - name: Deploy Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name "$LAMBDA_NAME" \
+            --zip-file fileb://lambda.zip
