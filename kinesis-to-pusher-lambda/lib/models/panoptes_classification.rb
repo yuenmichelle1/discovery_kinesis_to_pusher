@@ -27,7 +27,7 @@ module Models
     end
 
     def subject_urls
-      linked \
+      linked 
         .fetch("subjects", [])
         .select { |subject| (subject_ids & [subject["id"]]).size > 0 }
         .flat_map { |subject| subject["locations"] }

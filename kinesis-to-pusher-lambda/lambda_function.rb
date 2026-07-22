@@ -30,7 +30,8 @@ def lambda_handler(event:, context:)
   event['Records'].each do |record|
     payload = JSON.parse(Base64.decode64(record['kinesis']['data']))
 
-    model = Models.for(payload).compact
+    model = Models.for(payload)
+    next unless model
 
     unique_id = case [model.source, model.type]
             when ["panoptes", "classification"]
@@ -49,7 +50,7 @@ def lambda_handler(event:, context:)
       DYNAMODB.put_item(
         table_name: DYNAMODB_TABLE,
         item: {
-          'id' => unique_key,
+          'unique_key' => unique_key,
           'ttl' => Time.now.to_i + TTL_SECONDS
         },
         condition_expression: 'attribute_not_exists(unique_key)'
