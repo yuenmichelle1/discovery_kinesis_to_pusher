@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      LAMBDA_NAME: push_to_pusher_lambda
+      LAMBDA_NAME: kinesis-to-pusher-staging
 
     steps:
       - name: Checkout
@@ -28,15 +28,13 @@ jobs:
       - name: Install dependencies
         run: |
           if [ -f Gemfile ]; then
+            bundle config set path vendor/bundle
             bundle install
           fi
 
       - name: Zip Lambda
         run: |
-          mkdir build
-          cp -R kinesis-to-pusher/* build/
-          cd build
-          zip -r ../lambda.zip .
+          zip -r ../kinesis-to-pusher-staging.zip .
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -48,4 +46,4 @@ jobs:
         run: |
           aws lambda update-function-code \
             --function-name "$LAMBDA_NAME" \
-            --zip-file fileb://lambda.zip
+            --zip-file fileb://kinesis-to-pusher-staging.zip
