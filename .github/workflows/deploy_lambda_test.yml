@@ -51,4 +51,4 @@ jobs:
         run: |
           aws lambda update-function-code \
             --function-name "$LAMBDA_NAME" \
-            --zip-file fileb://kinesis-to-pusher-staging.zip
+            --zip-file fileb://lambda.zip
