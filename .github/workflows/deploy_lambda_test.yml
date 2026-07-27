@@ -1,4 +1,4 @@
-name: Deploy Ruby Lambda
+name: Deploy Ruby Lambda Staging
 
 on:
   push:
@@ -12,6 +12,9 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./kinesis-to-pusher-lambda
 
     env:
       LAMBDA_NAME: kinesis-to-pusher-staging
@@ -34,13 +37,15 @@ jobs:
 
       - name: Zip Lambda
         run: |
-          zip -r ../kinesis-to-pusher-staging.zip .
+          zip -r ./lambda.zip .
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE }}
+          aws-access-key-id: ${{ secrets.LAMBDA_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.LAMBDA_AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
+          role-session-name: lambda-deploy-staging
 
       - name: Deploy Lambda
         run: |
