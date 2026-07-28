@@ -1,9 +1,7 @@
 name: Deploy Ruby Lambda Staging
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 permissions:
   id-token: write
