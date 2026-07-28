@@ -1,40 +1,41 @@
 # frozen_string_literal: true
 
-# spec/lambda_spec.rb
-
 require 'spec_helper'
 require_relative '../lambda_function'
 
 RSpec.describe '#lambda_handler' do
   subject(:invoke) { lambda_handler(event: event, context: nil) }
 
-  let(:classification_payload) do
-    JSON.parse(File.read('spec/fixtures/example_kinesis_classification_payload.json'))
-  end
-
-  let(:comment_payload) do
-    JSON.parse(File.read('spec/fixtures/example_kinesis_comment_payload.json'))
-  end
-
   before do
     allow(DYNAMODB).to receive(:put_item)
     allow(PUSHER).to receive(:trigger)
   end
 
+  def fixture(name)
+    JSON.parse(File.read("spec/fixtures/#{name}.json"))
+  end
+
+  def kinesis_event(payload)
+    {
+      'Records' => [
+        {
+          'kinesis' => {
+            'data' => Base64.strict_encode64(JSON.dump(payload))
+          }
+        }
+      ]
+    }
+  end
+
   describe 'when Models.for returns nil' do
     let(:event) do
-      {
-        'Records' => [
-          {
-            'kinesis' => {
-              'data' => Base64.encode64(JSON.dump({ 'source' => 'unknown', 'type' => 'unknown' }))
-            }
-          }
-        ]
-      }
+      kinesis_event(
+        'source' => 'unknown',
+        'type' => 'unknown'
+      )
     end
 
-    it 'does nothing' do
+    it 'does not write or publish' do
       invoke
 
       expect(DYNAMODB).not_to have_received(:put_item)
@@ -43,26 +44,19 @@ RSpec.describe '#lambda_handler' do
   end
 
   describe 'for a Talk comment' do
-    let(:event) do
-      {
-        'Records' => [
-          {
-            'kinesis' => {
-              'data' => Base64.encode64(JSON.dump(comment_payload))
-            }
-          }
-        ]
-      }
-    end
+    let(:payload) { fixture('comment_payload') }
+    let(:event) { kinesis_event(payload) }
 
     it 'stores the unique key in DynamoDB' do
       invoke
+
+      comment_id = payload['data']['id']
 
       expect(DYNAMODB).to have_received(:put_item).with(
         hash_including(
           table_name: DYNAMODB_TABLE,
           item: hash_including(
-            'unique_key' => 'talk-comment-1820'
+            'unique_key' => "talk-comment-#{comment_id}"
           ),
           condition_expression: 'attribute_not_exists(unique_key)'
         )
@@ -72,81 +66,88 @@ RSpec.describe '#lambda_handler' do
     it 'publishes the event to Pusher' do
       invoke
 
-      comment_attributes = Models::TalkComment.new(comment_payload).attributes
       expect(PUSHER).to have_received(:trigger).with(
         'talk',
         'comment',
-        comment_attributes
+        Models::TalkComment.new(payload).attributes
       )
     end
   end
 
   describe 'for a Panoptes classification' do
-    let(:event) do
-      {
-        'Records' => [
-          {
-            'kinesis' => {
-              'data' => Base64.encode64(JSON.dump(classification_payload))
-            }
-          }
-        ]
-      }
-    end
+    let(:payload) { fixture('classification_payload') }
+    let(:event) { kinesis_event(payload) }
+    let(:attributes) { Models::PanoptesClassification.new(payload).attributes }
 
-    it 'does not publish to the general panoptes channel' do
+    it 'stores the unique key in DynamoDB' do
       invoke
 
-      expect(PUSHER).not_to have_received(:trigger).with(
-        'panoptes',
-        'classification',
-        anything
+      classification_id = payload['data']['id']
+
+      expect(DYNAMODB).to have_received(:put_item).with(
+        hash_including(
+          table_name: DYNAMODB_TABLE,
+          item: hash_including(
+            'unique_key' => "panoptes-classification-#{classification_id}"
+          ),
+          condition_expression: 'attribute_not_exists(unique_key)'
+        )
       )
     end
 
     it 'publishes to the project-specific channel' do
       invoke
 
-      attributes = Models::PanoptesClassification.new(classification_payload).attributes
-      project_specific_channel = "panoptes-project-#{attributes[:project_id]}"
-
       expect(PUSHER).to have_received(:trigger).with(
-        project_specific_channel,
+        "panoptes-project-#{attributes[:project_id]}",
         'classification',
         attributes
       )
     end
   end
 
-  describe 'for a workflow counters event' do
-    let(:source) { 'panoptes' }
-    let(:type) { 'workflow_counters' }
+  describe 'workflow counters event' do
+    let(:payload) { fixture('workflow_counters_payload') }
+    let(:event) { kinesis_event(payload) }
+    let(:attributes) { Models::PanoptesWorkflowCounter.new(payload).attributes }
 
-    let(:attributes) do
-      {
-        project_id: 1,
-        workflow_id: 2,
-        classifications_count: 3
-      }
+    let(:unique_id) do
+      data = payload['data']
+      "#{data['project_id']}-#{data['workflow_id']}-#{data['classifications_count']}"
     end
 
-    it 'uses the expected unique key' do
+    it 'stores the expected unique key' do
       invoke
 
       expect(DYNAMODB).to have_received(:put_item).with(
         hash_including(
           item: hash_including(
-            'unique_key' => 'panoptes-workflow_counters-1-2-3'
+            'unique_key' => "panoptes-workflow_counters-#{unique_id}"
           )
         )
+      )
+    end
+
+    it 'publishes to the project-specific channel' do
+      invoke
+
+      expect(PUSHER).to have_received(:trigger).with(
+        "panoptes-project-#{attributes[:project_id]}",
+        'workflow_counters',
+        attributes
       )
     end
   end
 
   describe 'when the event type is unsupported' do
-    let(:type) { 'unknown' }
+    let(:event) do
+      kinesis_event(
+        'source' => 'talk',
+        'type' => 'unknown'
+      )
+    end
 
-    it 'returns without writing to DynamoDB' do
+    it 'does not write or publish' do
       invoke
 
       expect(DYNAMODB).not_to have_received(:put_item)
@@ -155,12 +156,12 @@ RSpec.describe '#lambda_handler' do
   end
 
   describe 'when DynamoDB reports a duplicate' do
+    let(:payload) { fixture('comment_payload') }
+    let(:event) { kinesis_event(payload) }
+
     before do
       allow(DYNAMODB).to receive(:put_item).and_raise(
-        Aws::DynamoDB::Errors::ConditionalCheckFailedException.new(
-          nil,
-          'duplicate'
-        )
+        Aws::DynamoDB::Errors::ConditionalCheckFailedException.new(nil, 'duplicate')
       )
     end
 

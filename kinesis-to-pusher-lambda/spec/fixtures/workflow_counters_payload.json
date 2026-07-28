@@ -1,0 +1,16 @@
+{
+  "source": "panoptes",
+  "type": "workflow_counters",
+  "version": "1.0.0",
+  "timestamp": "2026-07-28T20:19:13Z",
+  "data": {
+    "project_id": 1936,
+    "project_name": "A Goofy Test",
+    "workflow_id": 3679,
+    "workflow_name": "test",
+    "subjects_count": 10,
+    "retired_subjects_count": 1,
+    "classifications_count": 39
+  },
+  "linked": {}
+}
