@@ -11,10 +11,6 @@ RSpec.describe '#lambda_handler' do
     allow(PUSHER).to receive(:trigger)
   end
 
-  def fixture(name)
-    JSON.parse(File.read("spec/fixtures/#{name}.json"))
-  end
-
   def kinesis_event(payload)
     {
       'Records' => [

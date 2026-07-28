@@ -18,6 +18,10 @@ Aws.config.update(
   region: 'us-east-1'
 )
 
+def fixture(name)
+  JSON.parse(File.read("spec/fixtures/#{name}.json"))
+end
+
 # spec/spec_helper.rb
 RSpec.configure do |config|
   config.before(:each) do
