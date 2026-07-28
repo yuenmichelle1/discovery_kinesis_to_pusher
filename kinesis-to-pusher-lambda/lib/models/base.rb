@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Models
   class Base
     def initialize(event)
@@ -7,21 +9,21 @@ module Models
     attr_reader :event
 
     def id
-      Digest::SHA1.hexdigest("#{attributes}")
+      Digest::SHA1.hexdigest(attributes.to_s)
     end
 
     def source
-      event.fetch("source")
+      event.fetch('source')
     end
 
     def type
-      event.fetch("type")
+      event.fetch('type')
     end
 
     def timestamp
-      if event["timestamp"]
-        DateTime.parse(event["timestamp"])
-      end
+      return unless event['timestamp']
+
+      DateTime.parse(event['timestamp'])
     end
 
     def attributes
@@ -31,15 +33,15 @@ module Models
     private
 
     def data
-      event["data"]
+      event['data']
     end
 
     def links
-      data["links"]
+      data['links']
     end
 
     def linked
-      event["linked"]
+      event['linked']
     end
   end
 end

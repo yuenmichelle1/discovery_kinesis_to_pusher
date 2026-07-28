@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'json'
 require 'pusher'
 require 'base64'
@@ -7,22 +9,21 @@ require 'geocoder'
 require_relative 'lib/geo'
 require_relative 'lib/models'
 
-
 TTL_SECONDS = 60 * 60 * 24 # 24 hours
 
 Geocoder.configure(ip_lookup: :geoip2, geoip2: {
-    file: File.expand_path('./lib/data/GeoLite2-City.mmdb', __FILE__)
-})
+                     file: File.expand_path('lib/data/GeoLite2-City.mmdb', __dir__)
+                   })
 
 DYNAMODB = Aws::DynamoDB::Client.new
 
-DYNAMODB_TABLE = ENV.fetch("DYNAMODB_TABLE_NAME")
+DYNAMODB_TABLE = ENV.fetch('DYNAMODB_TABLE_NAME')
 
 PUSHER = Pusher::Client.new(
-  app_id: ENV.fetch("PUSHER_APP_ID"),
-  key: ENV.fetch("PUSHER_KEY"),
-  secret: ENV.fetch("PUSHER_SECRET"),
-  cluster: ENV.fetch("PUSHER_CLUSTER"),
+  app_id: ENV.fetch('PUSHER_APP_ID'),
+  key: ENV.fetch('PUSHER_KEY'),
+  secret: ENV.fetch('PUSHER_SECRET'),
+  cluster: ENV.fetch('PUSHER_CLUSTER'),
   use_tls: true
 )
 
@@ -34,13 +35,13 @@ def lambda_handler(event:, context:)
     next unless model
 
     unique_id = case [model.source, model.type]
-            when ["panoptes", "classification"]
-              model.attributes[:classification_id]
-            when ["panoptes", "workflow_counters"]
-              "#{model.attributes[:project_id]}-#{model.attributes[:workflow_id]}-#{model.attributes[:classifications_count]}"
-            when ["talk", "comment"]
-              model.attributes[:id]
-            end
+                when %w[panoptes classification]
+                  model.attributes[:classification_id]
+                when %w[panoptes workflow_counters]
+                  "#{model.attributes[:project_id]}-#{model.attributes[:workflow_id]}-#{model.attributes[:classifications_count]}"
+                when %w[talk comment]
+                  model.attributes[:id]
+                end
 
     return unless unique_id
 
@@ -55,24 +56,25 @@ def lambda_handler(event:, context:)
         },
         condition_expression: 'attribute_not_exists(unique_key)'
       )
-      
+
       ## Skip pushing panoptes classification events to the general channel, for now until zoo-event-stats push to pusher is archived to repeat duplicate messaging
-      #TODO: Remove this conditional once zoo-event-stats is archived and no longer pushing to pusher
-      PUSHER.trigger(
-        model.source,          
-        model.type,
-         model.attributes
-      ) unless model.source == "panoptes"  
-      
-      if model.source == "panoptes" && model.type == "classification"
-        project_specific_channel = "panoptes-project-#{model.attributes[:project_id]}"
+      # TODO: Remove this conditional once zoo-event-stats is archived and no longer pushing to pusher
+      unless model.source == 'panoptes'
         PUSHER.trigger(
-          project_specific_channel,  
-          model.type,   
+          model.source,
+          model.type,
           model.attributes
         )
       end
 
+      if model.source == 'panoptes'
+        project_specific_channel = "panoptes-project-#{model.attributes[:project_id]}"
+        PUSHER.trigger(
+          project_specific_channel,
+          model.type,
+          model.attributes
+        )
+      end
     rescue Aws::DynamoDB::Errors::ConditionalCheckFailedException
       next
     end
