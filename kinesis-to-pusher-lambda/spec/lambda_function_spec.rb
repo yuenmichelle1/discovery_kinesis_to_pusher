@@ -30,8 +30,8 @@ RSpec.describe '#lambda_handler' do
   describe 'when Models.for returns nil' do
     let(:event) do
       kinesis_event(
-        'source' => 'unknown',
-        'type' => 'unknown'
+        'source' => nil,
+        'type' => nil
       )
     end
 
